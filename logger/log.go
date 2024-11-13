@@ -6,6 +6,11 @@ import (
 
 	// log "github.com/sirupsen/logrus"
 
+	"os"
+	"path"
+	"time"
+
+	zaprotatelogs "github.com/lestrrat-go/file-rotatelogs"
 	. "github.com/logrusorgru/aurora/v4"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
@@ -36,102 +41,116 @@ var engineConfig = zapcore.EncoderConfig{
 	// },
 }
 
-var logLevel = zap.NewAtomicLevelAt(zap.DebugLevel)
-var logger *zap.Logger = zap.New(
-	zapcore.NewCore(zapcore.NewConsoleEncoder(engineConfig), multipleWriter, logLevel),
-	zap.AddCaller(),
-	zap.AddCallerSkip(1),
-)
-var sugaredLogger *zap.SugaredLogger = logger.Sugar()
-
 func NameEncoder(loggerName string, enc zapcore.PrimitiveArrayEncoder) {
 	enc.AppendString(Colorize(loggerName, WhiteFg|BlackBg).String())
 }
 
-type Logger struct {
-	*zap.SugaredLogger
+func NewLogger(name string) *zap.SugaredLogger {
+	return logger.Named(name)
 }
 
-func NewLogger(name string) *Logger {
-	return &Logger{
-		sugaredLogger.Named(name),
-	}
+var logger *zap.SugaredLogger
+var logLevel = zap.NewAtomicLevelAt(zap.DebugLevel)
+
+func Init(config *LogConfig) {
+	logger = zap.New(
+		zapcore.NewCore(zapcore.NewConsoleEncoder(engineConfig), multipleWriter, logLevel),
+		zap.AddCaller(),
+		zap.AddCallerSkip(1),
+	).Sugar()
+
+	SetLogLevel(config.LogLevel)
+	SetSavePath(config.LogFile)
 }
 
 func SetLogLevel(level string) {
+	if level == "" {
+		return
+	}
 	set_level, err := zap.ParseAtomicLevel(level)
 	if err != nil {
-		sugaredLogger.Error(err)
+		logger.Error(err)
 		return
 	}
 	logLevel = set_level
 	logger = logger.WithOptions(zap.WrapCore(func(c zapcore.Core) zapcore.Core {
 		return zapcore.NewCore(zapcore.NewConsoleEncoder(engineConfig), multipleWriter, logLevel)
 	}))
-	sugaredLogger = logger.Sugar()
-	// loglevel, err := zapcore.ParseLevel(level)
-	//
-	//	if err != nil {
-	//		sugaredLogger.Error(err)
-	//		return
-	//	}
-	//
-	// logLevel.SetLevel(loglevel)
 }
 
-func (l *Logger) AddCallerSkip(i int) {
-	l.SugaredLogger = l.SugaredLogger.WithOptions(zap.AddCallerSkip(i))
+// writer
+var multipleWriter = zapcore.NewMultiWriteSyncer(zapcore.AddSync(os.Stdout))
+
+func SetSavePath(file string) {
+	if file == "" {
+		return
+	}
+	fileWriter, err := zaprotatelogs.New(
+		path.Join(file, "%Y-%m-%d.log"), //日志的路径和文件名
+		// zaprotatelogs.WithLinkName(CONFIG.Zap.LinkName), // 生成软链，指向最新日志文件
+		zaprotatelogs.WithMaxAge(time.Duration(7*24)*time.Hour), //保存日期的时间
+		zaprotatelogs.WithRotationTime(24*time.Hour),            //每天分割一次日志
+	)
+	if err != nil {
+		logger.Error(err)
+		return
+	}
+	multipleWriter = zapcore.NewMultiWriteSyncer(zapcore.AddSync(os.Stdout), zapcore.AddSync(fileWriter))
+
+	logger = logger.WithOptions(zap.WrapCore(func(c zapcore.Core) zapcore.Core {
+		return zapcore.NewCore(zapcore.NewConsoleEncoder(engineConfig), multipleWriter, logLevel)
+	}))
 }
 
-func (l *Logger) Debug(args ...interface{}) {
-	l.SugaredLogger.Debug(args...)
+func Debug(args ...any) {
+	logger.Debug(args...)
 }
 
-func (l *Logger) Info(args ...interface{}) {
-	l.SugaredLogger.Info(args...)
+func Info(args ...any) {
+	logger.Info(args...)
 }
 
-func (l *Logger) Warn(args ...interface{}) {
-	l.SugaredLogger.Warn(args...)
+func Warn(args ...any) {
+	logger.Warn(args...)
 }
 
-func (l *Logger) Error(args ...interface{}) {
-	l.SugaredLogger.Error(args...)
+func Error(args ...any) {
+	logger.Error(args...)
 }
 
-func (l *Logger) Fatal(args ...interface{}) {
-	l.SugaredLogger.Fatal(args...)
+func Panic(args ...any) {
+	logger.Panic(args...)
 }
 
-func (l *Logger) Panic(args ...interface{}) {
-	l.SugaredLogger.Panic(args...)
+func Fatal(args ...any) {
+	logger.Fatal(args...)
 }
 
-func (l *Logger) Debugf(format string, args ...interface{}) {
-	l.SugaredLogger.Debugf(format, args...)
+func Debugf(format string, args ...interface{}) {
+	logger.Debugf(format, args...)
 }
 
 // Infof logs a message at level Info on the standard logger.
-func (l *Logger) Infof(format string, args ...interface{}) {
-	l.SugaredLogger.Infof(format, args...)
+func Infof(format string, args ...interface{}) {
+	logger.Infof(format, args...)
 }
 
 // Warnf logs a message at level Warn on the standard logger.
-func (l *Logger) Warnf(format string, args ...interface{}) {
-	l.SugaredLogger.Warnf(format, args...)
+func Warnf(format string, args ...interface{}) {
+	logger.Warnf(format, args...)
 }
 
 // Errorf logs a message at level Error on the standard logger.
-func (l *Logger) Errorf(format string, args ...interface{}) {
-	l.SugaredLogger.Errorf(format, args...)
+func Errorf(format string, args ...interface{}) {
+	logger.Errorf(format, args...)
 }
 
 // Panicf logs a message at level Panic on the standard logger.
-func (l *Logger) Panicf(format string, args ...interface{}) {
-	l.SugaredLogger.Panicf(format, args...)
+func Panicf(format string, args ...interface{}) {
+	logger.Panicf(format, args...)
 }
 
 // Fatalf logs a message at level Fatal on the standard logger then the process will exit with status set to 1.
-func (l *Logger) Fatalf(format string, args ...interface{}) {
-	l.SugaredLogger.Fatalf(format, args...)
+func Fatalf(format string, args ...interface{}) {
+	logger.Fatalf(format, args...)
 }

@@ -43,7 +43,7 @@ type Consumer struct {
 	Conn    *amqp.Connection
 	Channel *amqp.Channel
 	Config  *ChannelConfig
-	RdData  <-chan amqp.Delivery
+	// RdData  <-chan amqp.Delivery
 	handler func(body []byte)
 }
 
@@ -76,11 +76,11 @@ func NewChannelConfig(t, exchange, queue string, key []string, durable bool) *Ch
 }
 
 func listenClose(mq *MQ) {
-	for e := range mq.NotifyClose {
-		log.Println(e)
-		mq.reconnect()
-		log.Println("重连成功...")
-	}
+	e := <-mq.NotifyClose
+	log.Println(e)
+	mq.Conn.Close()
+	mq.reconnect()
+	log.Println("重连成功...")
 }
 
 func (cfg *MQConfig) address() string {
@@ -112,19 +112,21 @@ func (mq *MQ) reconnect() {
 			log.Println(err)
 			t.Reset(reconnectDelay)
 		} else {
-			log.Println("MQ重连成功")
+			mq.NotifyClose = make(chan *amqp.Error)
 			conn.NotifyClose(mq.NotifyClose)
 			mq.Conn = conn
 
 			for _, c := range mq.consumers {
+				c.Channel.Close()
 				c.Conn = mq.Conn
 				c.Reset()
 			}
-
 			for _, p := range mq.producers {
+				p.Channel.Close()
 				p.Conn = mq.Conn
 				p.Reset()
 			}
+			go listenClose(mq)
 			return
 		}
 	}
@@ -207,10 +209,10 @@ func (mq *MQ) NewConsumer(config *ChannelConfig, handler func(body []byte)) *Con
 		if err != nil {
 			log.Panic(err)
 		}
-		c.RdData = msgs
+		// c.RdData = msgs
 		c.handler = handler
 		mq.consumers = append(mq.consumers, c)
-		go c.HandleMsg()
+		go c.HandleMsg(msgs)
 	}
 	log.Println(c.Config.Queue + " 创建成功")
 	return c
@@ -313,15 +315,15 @@ func (c *Consumer) Reset() {
 				t.Reset(reconnectDelay)
 				continue
 			}
-			c.RdData = msgs
-			go c.HandleMsg()
+			// c.RdData = msgs
+			go c.HandleMsg(msgs)
 			return
 		}
 	}
 }
 
-func (c *Consumer) HandleMsg() {
-	for msg := range c.RdData {
+func (c *Consumer) HandleMsg(data <-chan amqp.Delivery) {
+	for msg := range data {
 		c.handler(msg.Body)
 	}
 }

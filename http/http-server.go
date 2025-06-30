@@ -11,7 +11,7 @@ var s *HttpServer
 func init() {
 	s = &HttpServer{
 		&http.Server{
-			ReadTimeout:    2 * time.Minute,
+			ReadTimeout:    5 * time.Minute,
 			WriteTimeout:   2 * time.Minute,
 			MaxHeaderBytes: 1 << 20,
 		},

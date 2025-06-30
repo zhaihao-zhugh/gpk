@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"crypto/tls"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"time"
 )
@@ -16,7 +17,7 @@ func init() {
 			Transport: &http.Transport{
 				TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
 			},
-			Timeout: time.Minute,
+			Timeout: 5 * time.Minute,
 		},
 	}
 }
@@ -42,6 +43,8 @@ func (c *HTTPJSON) get(url string, param any) (*http.Response, error) {
 	if err != nil {
 		return nil, err
 	}
+	// ctx, _ := context.WithTimeout(context.Background(), 2*time.Minute)
+	// r = r.WithContext(ctx)
 	return c.Do(r)
 }
 
@@ -50,6 +53,8 @@ func (c *HTTPJSON) post(url string, param any) (*http.Response, error) {
 	if err != nil {
 		return nil, err
 	}
+	// ctx, _ := context.WithTimeout(context.Background(), 2*time.Minute)
+	// r = r.WithContext(ctx)
 	return c.Do(r)
 }
 
@@ -60,6 +65,7 @@ func (c *HTTPJSON) newJsonReq(url, method string, param any) (*http.Request, err
 			return nil, err
 		}
 	}
+	fmt.Println("params: ", buf.String())
 	r, err := http.NewRequest(method, url, &buf)
 	if err != nil {
 		return nil, err

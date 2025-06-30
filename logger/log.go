@@ -52,12 +52,20 @@ func NewLogger(name string) *zap.SugaredLogger {
 var logger *zap.SugaredLogger
 var logLevel = zap.NewAtomicLevelAt(zap.DebugLevel)
 
-func Init(config *LogConfig) {
+func init() {
 	logger = zap.New(
 		zapcore.NewCore(zapcore.NewConsoleEncoder(engineConfig), multipleWriter, logLevel),
 		zap.AddCaller(),
 		zap.AddCallerSkip(1),
 	).Sugar()
+}
+
+func Init(config *LogConfig) {
+	// logger = zap.New(
+	// 	zapcore.NewCore(zapcore.NewConsoleEncoder(engineConfig), multipleWriter, logLevel),
+	// 	zap.AddCaller(),
+	// 	zap.AddCallerSkip(1),
+	// ).Sugar()
 
 	SetLogLevel(config.LogLevel)
 	SetSavePath(config.LogFile)

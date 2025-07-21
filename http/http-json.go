@@ -22,12 +22,12 @@ func init() {
 	}
 }
 
-func Get(url string, param any) (*http.Response, error) {
-	return c.get(url, param)
+func Get(url string, param any, header http.Header) (*http.Response, error) {
+	return c.get(url, param, header)
 }
 
-func Post(url string, param any) (*http.Response, error) {
-	return c.post(url, param)
+func Post(url string, param any, header http.Header) (*http.Response, error) {
+	return c.post(url, param, header)
 }
 
 func SetTimeout(t time.Duration) {
@@ -38,38 +38,39 @@ type HTTPJSON struct {
 	*http.Client
 }
 
-func (c *HTTPJSON) get(url string, param any) (*http.Response, error) {
-	r, err := c.newJsonReq(url, http.MethodGet, param)
+func (c *HTTPJSON) get(url string, param any, header http.Header) (*http.Response, error) {
+	r, err := c.newReq(url, http.MethodGet, param, header)
 	if err != nil {
 		return nil, err
 	}
-	// ctx, _ := context.WithTimeout(context.Background(), 2*time.Minute)
-	// r = r.WithContext(ctx)
 	return c.Do(r)
 }
 
-func (c *HTTPJSON) post(url string, param any) (*http.Response, error) {
-	r, err := c.newJsonReq(url, http.MethodPost, param)
+func (c *HTTPJSON) post(url string, param any, header http.Header) (*http.Response, error) {
+	r, err := c.newReq(url, http.MethodPost, param, header)
 	if err != nil {
 		return nil, err
 	}
-	// ctx, _ := context.WithTimeout(context.Background(), 2*time.Minute)
-	// r = r.WithContext(ctx)
 	return c.Do(r)
 }
 
-func (c *HTTPJSON) newJsonReq(url, method string, param any) (*http.Request, error) {
+func (c *HTTPJSON) newReq(url, method string, param any, header http.Header) (*http.Request, error) {
 	var buf bytes.Buffer
 	if param != nil {
 		if err := json.NewEncoder(&buf).Encode(param); err != nil {
 			return nil, err
 		}
+		fmt.Println("params: ", buf.String())
 	}
-	fmt.Println("params: ", buf.String())
 	r, err := http.NewRequest(method, url, &buf)
 	if err != nil {
 		return nil, err
 	}
 	r.Header.Set("Content-Type", "application/json")
+	if header != nil {
+		for k, v := range header {
+			r.Header.Set(k, v[0])
+		}
+	}
 	return r, nil
 }

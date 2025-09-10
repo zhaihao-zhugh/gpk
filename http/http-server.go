@@ -1,6 +1,7 @@
 package http
 
 import (
+	"gpk/logger"
 	"net/http"
 	"strconv"
 	"time"
@@ -39,5 +40,6 @@ func (s *HttpServer) SetHandler(handler http.Handler) {
 }
 
 func (s *HttpServer) Run() error {
+	logger.Info("http 服务启动完成，监听端口为 ", s.Addr)
 	return s.ListenAndServe()
 }

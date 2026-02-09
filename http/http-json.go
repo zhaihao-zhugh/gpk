@@ -6,13 +6,23 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"net/url"
 	"time"
 )
 
-var c *HTTPJSON
+func NewClient(timeout int) HTTPRequset {
+	return HTTPRequset{
+		&http.Client{
+			Transport: &http.Transport{
+				TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+			},
+			Timeout: time.Duration(timeout) * time.Minute,
+		},
+	}
+}
 
-func init() {
-	c = &HTTPJSON{
+func NewDefaultClient() HTTPRequset {
+	return HTTPRequset{
 		&http.Client{
 			Transport: &http.Transport{
 				TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
@@ -22,55 +32,93 @@ func init() {
 	}
 }
 
-func Get(url string, param any, header http.Header) (*http.Response, error) {
-	return c.get(url, param, header)
+func Get(url string, params ...map[string]any) (*http.Response, error) {
+	c := NewDefaultClient()
+	return c.Get(url, params...)
 }
 
-func Post(url string, param any, header http.Header) (*http.Response, error) {
-	return c.post(url, param, header)
+func Post(url string, params ...map[string]any) (*http.Response, error) {
+	c := NewDefaultClient()
+	return c.Post(url, params...)
 }
 
-func SetTimeout(t time.Duration) {
-	c.Timeout = t
-}
-
-type HTTPJSON struct {
+type HTTPRequset struct {
 	*http.Client
 }
 
-func (c *HTTPJSON) get(url string, param any, header http.Header) (*http.Response, error) {
-	r, err := c.newReq(url, http.MethodGet, param, header)
+func (c HTTPRequset) Get(url string, params ...map[string]any) (*http.Response, error) {
+	r, err := c.newReq(url, http.MethodGet, params...)
 	if err != nil {
 		return nil, err
 	}
 	return c.Do(r)
 }
 
-func (c *HTTPJSON) post(url string, param any, header http.Header) (*http.Response, error) {
-	r, err := c.newReq(url, http.MethodPost, param, header)
+func (c HTTPRequset) Post(url string, params ...map[string]any) (*http.Response, error) {
+	r, err := c.newReq(url, http.MethodPost, params...)
 	if err != nil {
 		return nil, err
 	}
 	return c.Do(r)
 }
 
-func (c *HTTPJSON) newReq(url, method string, param any, header http.Header) (*http.Request, error) {
+func (c HTTPRequset) newReq(urlPath, method string, params ...map[string]any) (*http.Request, error) {
 	var buf bytes.Buffer
-	if param != nil {
-		if err := json.NewEncoder(&buf).Encode(param); err != nil {
-			return nil, err
+
+	if len(params) == 2 {
+		switch method {
+		case http.MethodGet:
+			if params[0] != nil {
+				urlPath = urlPath + "?"
+				for k, v := range params[0] {
+					urlPath = urlPath + k + "=" + url.QueryEscape(fmt.Sprintf("%v", v)) + "&"
+				}
+			}
+
+			if params[1] != nil {
+				if err := json.NewEncoder(&buf).Encode(params[1]); err != nil {
+					return nil, err
+				}
+			}
+
+		case http.MethodPost:
+			if params[0] != nil {
+				if err := json.NewEncoder(&buf).Encode(params[0]); err != nil {
+					return nil, err
+				}
+			}
+
+			if params[1] != nil {
+				urlPath = urlPath + "?"
+				for k, v := range params[1] {
+					urlPath = urlPath + k + "=" + url.QueryEscape(fmt.Sprintf("%v", v)) + "&"
+				}
+			}
+
 		}
-		fmt.Println("params: ", buf.String())
+	} else if len(params) == 1 {
+		switch method {
+		case http.MethodGet:
+			if params[0] != nil {
+				urlPath = urlPath + "?"
+				for k, v := range params[0] {
+					urlPath = urlPath + k + "=" + url.QueryEscape(fmt.Sprintf("%v", v)) + "&"
+				}
+			}
+		case http.MethodPost:
+			if params[0] != nil {
+				if err := json.NewEncoder(&buf).Encode(params[0]); err != nil {
+					return nil, err
+				}
+			}
+		}
 	}
-	r, err := http.NewRequest(method, url, &buf)
+
+	r, err := http.NewRequest(method, urlPath, &buf)
 	if err != nil {
 		return nil, err
 	}
 	r.Header.Set("Content-Type", "application/json")
-	if header != nil {
-		for k, v := range header {
-			r.Header.Set(k, v[0])
-		}
-	}
+
 	return r, nil
 }
